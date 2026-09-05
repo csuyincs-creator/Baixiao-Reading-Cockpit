@@ -4,6 +4,29 @@
 
 一个面向 Obsidian 的原生阅读状态与知识沉淀看板插件。
 
+Baixiao Reading Cockpit helps you manage reading progress and turn notes into a reviewable knowledge workflow. It scans Markdown notes in your vault, groups them by reading and absorption status, and lets you update those properties from the dashboard.
+
+## Installation
+
+1. Open Obsidian and go to **Settings → Community plugins**.
+2. Search for **Baixiao Reading Cockpit** and install it.
+3. Enable the plugin, then open **Baixiao Reading Cockpit** from the command palette or the ribbon.
+
+For manual installation, copy `main.js`, `manifest.json`, and `styles.css` into `.obsidian/plugins/ycs-reading-dashboard/` in your vault, then reload Obsidian and enable the plugin.
+
+## Usage
+
+- Open the dashboard to see unread, reading, read, and long-unread notes.
+- Use the queue and detail panel to change `阅读状态` and `吸收状态` in note frontmatter.
+- View the annual reading heatmap in both the main dashboard and the compact sidebar.
+- Open the fluid-card settings to adjust the default visual style and personal identity labels.
+
+The plugin reads and writes Markdown frontmatter locally. It does not upload vault notes or call a remote AI service.
+
+## Configuration
+
+The default visual configuration is embedded in `main.js`. Personal changes are saved locally by Obsidian in `data.json`; this file is intentionally excluded from the repository.
+
 ## 功能
 
 - 扫描 Vault 中的 Markdown 笔记，按阅读状态和吸收状态生成看板。
