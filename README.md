@@ -1,4 +1,6 @@
-# 阅读吸收驾驶舱
+# Baixiao Reading Cockpit
+
+阅读吸收驾驶舱
 
 一个面向 Obsidian 的原生阅读状态与知识沉淀看板插件。
 

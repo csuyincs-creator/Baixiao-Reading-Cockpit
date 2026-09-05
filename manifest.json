@@ -1,7 +1,7 @@
 {
   "id": "ycs-reading-dashboard",
-  "name": "阅读吸收驾驶舱",
-  "version": "1.0.1",
+  "name": "Baixiao Reading Cockpit",
+  "version": "1.0.2",
   "minAppVersion": "1.5.0",
   "description": "管理阅读状态、推进阅读流程并沉淀知识。",
   "author": "YCS",
