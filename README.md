@@ -50,6 +50,10 @@ node --check main.js
 node tests/reading-dashboard-contract.test.js
 ```
 
+## License
+
+MIT License，详见根目录 `LICENSE` 文件。
+
 ## 兼容性
 
 - Obsidian 1.5.0 及以上
