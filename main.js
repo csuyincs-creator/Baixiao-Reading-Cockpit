@@ -33,12 +33,17 @@ const isOlderThan = (value, days) => {
 };
 const isManaged = (f) => f instanceof TFile && f.extension === "md" && !EXCLUDED_FILES.has(f.name) && !f.path.split("/").some((p) => EXCLUDES.has(p));
 const FLUID_PRESETS = { cyan: { a: "#00e7d2", b: "#3cc8ff", c: "#075f68" }, original: { a: "#ff3aa7", b: "#ff8050", c: "#a443ff" }, klein: { a: "#3158ff", b: "#ff6531", c: "#20252e" }, chrome: { a: "#eef2f3", b: "#6c7780", c: "#11171d" } };
-const FLUID_DEFAULTS = { quality: "auto", interaction: true, cards: { today: { preset: "cyan", ...FLUID_PRESETS.cyan, speed: .92, intensity: 1.02, pointer: .82, surface: .08, seed: 1.7 }, unread: { preset: "cyan", ...FLUID_PRESETS.cyan, speed: .84, intensity: 1.08, pointer: .80, surface: .08, seed: 4.9 }, read: { preset: "cyan", ...FLUID_PRESETS.cyan, speed: .76, intensity: .98, pointer: .72, surface: .08, seed: 8.4 }, backlog: { preset: "cyan", ...FLUID_PRESETS.cyan, speed: .88, intensity: 1.05, pointer: .86, surface: .08, seed: 12.1 } } };
+const FLUID_DEFAULTS = { quality: "high", interaction: true, cards: { today: { preset: "chrome", ...FLUID_PRESETS.chrome, speed: 1.92, intensity: 1.6, pointer: 1.5, surface: .86, seed: 1.7 }, unread: { preset: "custom", a: "#00e7d2", b: "#3cc8ff", c: "#096907", speed: .84, intensity: 1.08, pointer: .8, surface: .08, seed: 4.9 }, read: { preset: "custom", a: "#3158ff", b: "#36ff33", c: "#20252e", speed: .76, intensity: .98, pointer: .72, surface: .08, seed: 8.4 }, backlog: { preset: "original", ...FLUID_PRESETS.original, speed: .75, intensity: 1.05, pointer: .86, surface: .08, seed: 12.1 } } };
+const IDENTITY_DEFAULTS = { brandMark: "YCS", brandName: "Knowledge OS", avatarText: "DY", displayName: "大Y", role: "知识库管理员" };
+const DASHBOARD_DEFAULTS = { statLayout: "single-row", fontScale: 1.15, orbitCard: { width: 87, height: 132, offset: 82 }, orbitView: { r: 55.45340963580384, x: -5.910746807611419, zoom: .72, radius: 190, auto: false, speed: 1, flat: false } };
 const fluidClone = (value) => JSON.parse(JSON.stringify(value));
 const fluidClamp = (n, min, max) => Math.min(max, Math.max(min, n));
 const orbitAngle = (value, fallback = -24) => { const n = Number(value); return Number.isFinite(n) ? ((n + 180) % 360 + 360) % 360 - 180 : fallback; };
 const fluidHex = (value, fallback) => /^#[0-9a-f]{6}$/i.test(value || "") ? value.toLowerCase() : fallback;
 const fluidRgb = (hex) => { const n = parseInt(hex.slice(1), 16); return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]; };
+const boundedText = (value, fallback, maxLength) => { if (value === undefined || value === null) return fallback; return String(value).trim().slice(0, maxLength); };
+const finiteNumber = (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+const identitySettings = (raw) => { const next = fluidClone(IDENTITY_DEFAULTS); if (!raw || typeof raw !== "object" || Array.isArray(raw)) return next; next.brandMark = boundedText(raw.brandMark, next.brandMark, 16); next.brandName = boundedText(raw.brandName, next.brandName, 32); next.avatarText = boundedText(raw.avatarText, next.avatarText, 16); next.displayName = boundedText(raw.displayName, next.displayName, 32); next.role = boundedText(raw.role, next.role, 32); return next; };
 function fluidSettings(raw) { const next = fluidClone(FLUID_DEFAULTS); if (!raw || typeof raw !== "object") return next; next.quality = ["auto", "high", "balanced", "eco", "fallback"].includes(raw.quality) ? raw.quality : next.quality; next.interaction = typeof raw.interaction === "boolean" ? raw.interaction : next.interaction; Object.keys(next.cards).forEach((id) => { const s = raw.cards?.[id]; if (!s) return; const d = next.cards[id]; next.cards[id] = { ...d, preset: typeof s.preset === "string" ? s.preset : "custom", a: fluidHex(s.a, d.a), b: fluidHex(s.b, d.b), c: fluidHex(s.c, d.c), speed: fluidClamp(Number(s.speed) || d.speed, 0, 2), intensity: fluidClamp(Number(s.intensity) || d.intensity, .35, 1.6), pointer: fluidClamp(Number.isFinite(Number(s.pointer)) ? Number(s.pointer) : d.pointer, 0, 1.5), surface: fluidClamp(Number.isFinite(Number(s.surface)) ? Number(s.surface) : d.surface, 0, 1), seed: Number.isFinite(Number(s.seed)) ? Number(s.seed) : d.seed }; }); return next; }
 
 class DashboardView extends ItemView {
@@ -275,7 +280,7 @@ class DashboardView extends ItemView {
       ? [["今日新增", notes.filter((n) => isTodayAdded(n) && n.reading === "未读").sort((a, b) => a.title.localeCompare(b.title, "zh-Hans-CN")).slice(0, 4), "green"], ["长期积压", notes.filter((n) => n.reading === "未读" && isOlderThan(n.created, 30)).sort((a, b) => a.created.localeCompare(b.created)).slice(0, 4), "blue"], ["待沉淀", notes.filter((n) => n.reading === "已读" && n.absorption === "待沉淀").sort((a, b) => String(b.completed || "").localeCompare(String(a.completed || ""))).slice(0, 4), "purple"]]
       : [[labels[this.state.filter], notes.slice(0, 12), this.state.filter === "reading" ? "blue" : this.state.filter === "absorption" ? "purple" : "green"]];
     const queue = groups.map(([label, rows, color]) => `<div class="ycs-group"><div class="ycs-group-head"><i class="ycs-group-dot ${color}"></i>${label}<span>${rows.length}</span><b>⌄</b></div>${rows.length ? rows.map((n) => `<button class="ycs-queue-note" data-open="${esc(n.path)}"><span>${esc(n.title)}</span><em>${n.reading}</em><small>${dateText(n.created)}</small></button>`).join("") : `<div class="ycs-empty">暂无${label}笔记</div>`}</div>`).join("");
-    root.innerHTML = `<main class="ycs-main"><header class="ycs-topbar"><div class="ycs-title"><h1>阅读管理</h1><p>未读识别 · 阅读推进 · 知识沉淀</p></div><button class="ycs-title-eye" type="button" aria-label="眼镜互动效果"><span class="ycs-glasses-frame"><span class="ycs-glasses-lens"><i class="ycs-title-iris"></i></span><span class="ycs-glasses-bridge"></span><span class="ycs-glasses-lens"><i class="ycs-title-iris"></i></span></span></button><label class="ycs-search">⌕ <input placeholder="搜索笔记、目录或标签…"/><kbd>⌘K</kbd></label><div class="ycs-actions"><button class="ycs-icon" aria-label="流体卡片设置">Aa</button><button class="ycs-pill ycs-refresh">＋ 立即扫描</button></div></header><section class="ycs-stats">${this.stat("今日新增", this.state.notes.filter(isTodayAdded).length, "按创建日期统计", "▣")}${this.stat("未读库存", stats.unread, "全库实时统计", "〽")}${this.stat("已经阅读", stats.read, "全库实时统计", "✓")}${this.stat("长期未读", long.length, "超过 30 天的未读", "!", true)}</section><section class="ycs-board"><section class="ycs-queue"><div class="ycs-section-head"><b>阅读队列</b><span>真实数据 · ${notes.length} 篇</span></div><div class="ycs-tabs"><button>${labels[this.state.filter]}${this.state.folderFilter ? ` · ${esc(this.state.folderFilter)}` : ""}</button></div>${queue}</section><section class="ycs-visual ycs-glass"><div class="ycs-toolbar"><span><button class="ycs-orbit-mode active">◉ 3D 环绕</button><button class="ycs-auto active">↻ 自动巡航</button><button class="ycs-reset">⌖ 复位视角</button></span><span><button class="ycs-speed">速度 1×</button><button class="ycs-folder-filter">⌁ 全部目录</button></span></div><div class="ycs-stage"><div class="ycs-progress" style="left:${this.state.progress.x}%;top:${this.state.progress.y}%;--ycs-progress-scale:${this.state.progress.scale}"><div class="ycs-progress-controls"><button data-progress-scale="-0.1" aria-label="缩小阅读完成率卡">−</button><button data-progress-scale="0.1" aria-label="放大阅读完成率卡">＋</button></div><div>阅读完成率</div><b>${stats.rate}%</b><small>已读 / 全部笔记</small><i><em style="width:${stats.rate}%"></em></i></div><div class="ycs-live"><i></i>实时交互</div><div class="ycs-floor"></div><div class="ycs-orbit-core"></div><div class="ycs-scene"><div class="ycs-ring"></div></div><div class="ycs-caption">⌁ 拖动完成率卡 · 滚轮或 ± 缩放 · 双击目录卡打开文件夹 <b>${esc(this.active()?.folder || "阅读管理")}</b></div></div><div class="ycs-timeline"><div><b>阅读时间轴</b><span>▣ ${localDate()}</span><button class="ycs-today">今天</button></div><div class="ycs-gantt"><i>今</i><strong>全库 ${this.state.notes.length} 篇 · 未读 ${stats.unread} 篇 · 已读 ${stats.read} 篇 · 待沉淀 ${pending.length} 篇</strong></div></div></section></section></main>`;
+    root.innerHTML = `<main class="ycs-main"><header class="ycs-topbar"><div class="ycs-title"><h1>阅读管理</h1><p>未读识别 · 阅读推进 · 知识沉淀</p></div><label class="ycs-search">⌕ <input placeholder="搜索笔记、目录或标签…"/><kbd>⌘K</kbd></label><div class="ycs-actions"><button class="ycs-icon" aria-label="流体卡片设置">Aa</button><button class="ycs-pill ycs-refresh">＋ 立即扫描</button></div></header><section class="ycs-stats">${this.stat("今日新增", this.state.notes.filter(isTodayAdded).length, "按创建日期统计", "▣")}${this.stat("未读库存", stats.unread, "全库实时统计", "〽")}${this.stat("已经阅读", stats.read, "全库实时统计", "✓")}${this.stat("长期未读", long.length, "超过 30 天的未读", "!", true)}</section><section class="ycs-board"><section class="ycs-queue"><div class="ycs-section-head"><b>阅读队列</b><span>真实数据 · ${notes.length} 篇</span></div><div class="ycs-tabs"><button>${labels[this.state.filter]}${this.state.folderFilter ? ` · ${esc(this.state.folderFilter)}` : ""}</button></div>${queue}</section><section class="ycs-visual ycs-glass"><div class="ycs-toolbar"><span><button class="ycs-orbit-mode active">◉ 3D 环绕</button><button class="ycs-auto active">↻ 自动巡航</button><button class="ycs-reset">⌖ 复位视角</button></span><span><button class="ycs-speed">速度 1×</button><button class="ycs-folder-filter">⌁ 全部目录</button></span></div><div class="ycs-stage"><div class="ycs-progress" style="left:${this.state.progress.x}%;top:${this.state.progress.y}%;--ycs-progress-scale:${this.state.progress.scale}"><div class="ycs-progress-controls"><button data-progress-scale="-0.1" aria-label="缩小阅读完成率卡">−</button><button data-progress-scale="0.1" aria-label="放大阅读完成率卡">＋</button></div><div>阅读完成率</div><b>${stats.rate}%</b><small>已读 / 全部笔记</small><i><em style="width:${stats.rate}%"></em></i></div><div class="ycs-live"><i></i>实时交互</div><div class="ycs-floor"></div><div class="ycs-orbit-core"></div><div class="ycs-scene"><div class="ycs-ring"></div></div><div class="ycs-caption">⌁ 拖动完成率卡 · 滚轮或 ± 缩放 · 双击目录卡打开文件夹 <b>${esc(this.active()?.folder || "阅读管理")}</b></div></div><div class="ycs-timeline"><div><b>阅读时间轴</b><span>▣ ${localDate()}</span><button class="ycs-today">今天</button></div><div class="ycs-gantt"><i>今</i><strong>全库 ${this.state.notes.length} 篇 · 未读 ${stats.unread} 篇 · 已读 ${stats.read} 篇 · 待沉淀 ${pending.length} 篇</strong></div></div></section></section></main>`;
     root.querySelector(".ycs-refresh").onclick = () => this.render(); root.querySelector(".ycs-today").onclick = () => { this.state.filter = "today"; this.state.page = "dashboard"; this.render(); }; this.bindQueueNotes(root, true); this.bindV14Fluid(root); this.bindOrbit(root); this.bindSearch(root);
   }
   renderDetail(root) { const n = this.active(); if (!n) return; root.innerHTML = `<div class="ycs-right-head"><span>✦ 智能详情</span><span>⌕</span></div><div class="ycs-detail-id">${esc(n.path)}</div><div class="ycs-detail-title">${esc(n.title)} <small>本机数据</small></div><p class="ycs-detail-desc">这篇笔记位于 ${esc(n.folder)}，可直接在此推进阅读和沉淀状态。</p><div class="ycs-detail-grid"><span>负责人</span><b><i>DY</i>大Y</b><span>所属目录</span><b>☑ ${esc(n.folder)}</b><span>创建日期</span><b>▣ ${dateText(n.created)}</b><span>阅读状态</span><select data-path="${esc(n.path)}" data-field="阅读状态">${this.options(READING, n.reading)}</select><span>吸收状态</span><select data-path="${esc(n.path)}" data-field="吸收状态">${this.options(ABSORPTION, n.absorption)}</select><span>打开方式</span><b>Obsidian 本地库</b></div><div class="ycs-ai"><b>AI 助手建议</b>• 优先完成已经在读超过 7 天的笔记<br>• 将已读内容提炼为摘要或 Wiki 条目</div><div class="ycs-right-actions"><button class="ycs-open">在 Obsidian 打开</button><button class="ycs-next">推进状态</button><button class="ycs-absorb">沉淀</button></div>`; this.bindSelects(root); root.querySelector(".ycs-open").onclick = () => this.app.workspace.openLinkText(n.path, "", false); root.querySelector(".ycs-next").onclick = () => this.update(n, "阅读状态", n.reading === "未读" ? "在读" : n.reading === "在读" ? "已读" : "未读"); root.querySelector(".ycs-absorb").onclick = () => this.update(n, "吸收状态", n.absorption === "待沉淀" ? "已沉淀" : "待沉淀"); }
@@ -386,30 +391,24 @@ ReadingDashboardPluginClass.prototype.onload = async function () {
   const saved = (await this.loadData()) || {};
   const rawScale = Number(saved.dashboard?.fontScale);
   // 旧版本的 85%--125% 会让小字号难以阅读；统一迁移到实际提供给用户的舒适范围。
-  this.dashboardSettings.fontScale = Number.isFinite(rawScale) ? Math.min(1.15, Math.max(.95, rawScale)) : 1;
+  this.dashboardSettings.fontScale = Number.isFinite(rawScale) ? Math.min(1.15, Math.max(.95, rawScale)) : DASHBOARD_DEFAULTS.fontScale;
   const savedOrbitCard = saved.dashboard?.orbitCard || {};
   this.dashboardSettings.orbitCard = {
-    width: Math.min(220, Math.max(80, Number(savedOrbitCard.width) || 120)),
-    height: Math.min(300, Math.max(120, Number(savedOrbitCard.height) || 182)),
-    offset: Math.min(180, Math.max(-180, Number(savedOrbitCard.offset) || 0))
+    width: Math.min(220, Math.max(80, finiteNumber(savedOrbitCard.width, DASHBOARD_DEFAULTS.orbitCard.width))),
+    height: Math.min(300, Math.max(120, finiteNumber(savedOrbitCard.height, DASHBOARD_DEFAULTS.orbitCard.height))),
+    offset: Math.min(180, Math.max(-180, finiteNumber(savedOrbitCard.offset, DASHBOARD_DEFAULTS.orbitCard.offset)))
   };
   const savedOrbitView = saved.dashboard?.orbitView || {};
   this.dashboardSettings.orbitView = {
-    r: orbitAngle(savedOrbitView.r),
-    x: Math.min(12, Math.max(-18, Number.isFinite(Number(savedOrbitView.x)) ? Number(savedOrbitView.x) : -5)),
-    zoom: Math.min(1.35, Math.max(.72, Number.isFinite(Number(savedOrbitView.zoom)) ? Number(savedOrbitView.zoom) : 1)),
-    radius: Math.min(340, Math.max(190, Number.isFinite(Number(savedOrbitView.radius)) ? Number(savedOrbitView.radius) : 240)),
-    auto: typeof savedOrbitView.auto === "boolean" ? savedOrbitView.auto : true,
-    speed: [.5, 1, 2].includes(Number(savedOrbitView.speed)) ? Number(savedOrbitView.speed) : 1,
-    flat: typeof savedOrbitView.flat === "boolean" ? savedOrbitView.flat : false
+    r: orbitAngle(savedOrbitView.r, DASHBOARD_DEFAULTS.orbitView.r),
+    x: Math.min(12, Math.max(-18, finiteNumber(savedOrbitView.x, DASHBOARD_DEFAULTS.orbitView.x))),
+    zoom: Math.min(1.35, Math.max(.72, finiteNumber(savedOrbitView.zoom, DASHBOARD_DEFAULTS.orbitView.zoom))),
+    radius: Math.min(340, Math.max(190, finiteNumber(savedOrbitView.radius, DASHBOARD_DEFAULTS.orbitView.radius))),
+    auto: typeof savedOrbitView.auto === "boolean" ? savedOrbitView.auto : DASHBOARD_DEFAULTS.orbitView.auto,
+    speed: [.5, 1, 2].includes(Number(savedOrbitView.speed)) ? Number(savedOrbitView.speed) : DASHBOARD_DEFAULTS.orbitView.speed,
+    flat: typeof savedOrbitView.flat === "boolean" ? savedOrbitView.flat : DASHBOARD_DEFAULTS.orbitView.flat
   };
-  const savedGlasses = saved.dashboard?.glasses || {};
-  this.dashboardSettings.glasses = {
-    iris: fluidHex(savedGlasses.iris, "#00f08a"),
-    frame: fluidHex(savedGlasses.frame, "#c9ffe0"),
-    visible: savedGlasses.visible !== false,
-    offset: Math.min(600, Math.max(-600, Number(savedGlasses.offset) || 0))
-  };
+  this.dashboardSettings.identity = identitySettings(saved.dashboard?.identity);
 };
 
 DashboardView.prototype.applyDashboardFontScale = function () {
@@ -475,35 +474,19 @@ DashboardView.prototype.installFontSetting = function () {
       input.oninput = () => { this.plugin.dashboardSettings.fontScale = Number(input.value) / 100; output.textContent = `${input.value}%`; this.applyDashboardFontScale(); window.clearTimeout(this.fontScaleSaveTimer); this.fontScaleSaveTimer = window.setTimeout(() => { void this.plugin.savePluginSettings(); }, 160); };
       input.onchange = () => { window.clearTimeout(this.fontScaleSaveTimer); void this.plugin.savePluginSettings(); };
     }
-    if (!panel.querySelector("[data-glasses-color]")) {
-      const glasses = this.plugin.dashboardSettings.glasses;
-      save.insertAdjacentHTML("beforebegin", `<div class="ycs-glasses-setting"><b>互动眼镜</b><label>虹膜主色 <input data-glasses-color="iris" type="color" value="${glasses.iris}"></label><label>镜框颜色 <input data-glasses-color="frame" type="color" value="${glasses.frame}"></label></div>`);
-      panel.querySelectorAll("[data-glasses-color]").forEach((input) => input.oninput = () => { this.plugin.dashboardSettings.glasses[input.dataset.glassesColor] = fluidHex(input.value, this.plugin.dashboardSettings.glasses[input.dataset.glassesColor]); this.applyGlassesAppearance(); window.clearTimeout(this.glassesSaveTimer); this.glassesSaveTimer = window.setTimeout(() => { void this.plugin.savePluginSettings(); }, 160); });
+    if (!panel.querySelector("[data-identity-settings]")) {
+      const identity = identitySettings(this.plugin.dashboardSettings.identity);
+      save.insertAdjacentHTML("beforebegin", `<div class="ycs-identity-setting" data-identity-settings><b>个人 IP</b><label>品牌标识 <input data-identity="brandMark" type="text" maxlength="16" value="${esc(identity.brandMark)}"></label><label>品牌名称 <input data-identity="brandName" type="text" maxlength="32" value="${esc(identity.brandName)}"></label><label>头像文字 <input data-identity="avatarText" type="text" maxlength="16" value="${esc(identity.avatarText)}"></label><label>显示名称 <input data-identity="displayName" type="text" maxlength="32" value="${esc(identity.displayName)}"></label><label>身份说明 <input data-identity="role" type="text" maxlength="32" value="${esc(identity.role)}"></label></div>`);
+      const maxLengths = { brandMark: 16, brandName: 32, avatarText: 16, displayName: 32, role: 32 };
+      panel.querySelectorAll("[data-identity]").forEach((input) => input.oninput = () => {
+        const key = input.dataset.identity;
+        if (!Object.hasOwn(maxLengths, key)) return;
+        this.plugin.dashboardSettings.identity[key] = boundedText(input.value, "", maxLengths[key]);
+        this.applyIdentityAppearance();
+        window.clearTimeout(this.identitySaveTimer);
+        this.identitySaveTimer = window.setTimeout(() => { void this.plugin.savePluginSettings(); }, 160);
+      });
     }
-  };
-};
-
-// 眼镜设置复用 Aa 面板，不在界面上额外增加控制按钮。
-const installFontSettingWithGlassesVisibility = DashboardView.prototype.installFontSetting;
-DashboardView.prototype.installFontSetting = function () {
-  installFontSettingWithGlassesVisibility.call(this);
-  const button = this.contentEl.querySelector(".ycs-actions .ycs-icon");
-  if (!button || button.dataset.ycsGlassesVisibilityBound) return;
-  button.dataset.ycsGlassesVisibilityBound = "true";
-  const openSettings = button.onclick;
-  button.onclick = () => {
-    openSettings?.call(button);
-    const panel = this.contentEl.querySelector(".ycs-fluid-panel");
-    const setting = panel?.querySelector(".ycs-glasses-setting");
-    if (!setting || setting.querySelector("[data-glasses-visible]")) return;
-    const glasses = this.plugin.dashboardSettings.glasses;
-    setting.insertAdjacentHTML("afterbegin", `<label class="ycs-glasses-visible"><input data-glasses-visible type="checkbox" ${glasses.visible !== false ? "checked" : ""}> 显示眼镜</label>`);
-    const visible = setting.querySelector("[data-glasses-visible]");
-    visible.onchange = () => {
-      this.plugin.dashboardSettings.glasses.visible = Boolean(visible.checked);
-      this.applyGlassesAppearance();
-      void this.plugin.savePluginSettings();
-    };
   };
 };
 
@@ -511,7 +494,7 @@ const renderDashboardWithFontAndDaily = DashboardView.prototype.render;
 DashboardView.prototype.render = async function () {
   await renderDashboardWithFontAndDaily.call(this);
   this.applyDashboardFontScale();
-  this.applyGlassesAppearance();
+  this.applyIdentityAppearance();
   // 这些是网页原型残留的装饰性控件；插件内没有相应的必要工作流。
   this.contentEl.querySelector(".ycs-search")?.remove();
   this.contentEl.querySelector(".ycs-caption")?.remove();
@@ -519,17 +502,22 @@ DashboardView.prototype.render = async function () {
   if (!this.isCompact()) {
     this.installDailyEntry();
     this.installFontSetting();
-    this.installTitleEye();
   }
 };
 
-DashboardView.prototype.applyGlassesAppearance = function () {
-  const glasses = this.plugin.dashboardSettings?.glasses || {};
-  this.contentEl.style.setProperty("--ycs-glasses-iris", fluidHex(glasses.iris, "#00f08a"));
-  this.contentEl.style.setProperty("--ycs-glasses-frame", fluidHex(glasses.frame, "#c9ffe0"));
-  this.contentEl.style.setProperty("--ycs-glasses-offset", `${Math.min(600, Math.max(-600, Number(glasses.offset) || 0))}px`);
-  const eye = this.contentEl.querySelector(".ycs-title-eye");
-  if (eye) eye.hidden = glasses.visible === false;
+DashboardView.prototype.applyIdentityAppearance = function () {
+  const identity = identitySettings(this.plugin.dashboardSettings?.identity);
+  this.plugin.dashboardSettings.identity = identity;
+  const brandMark = this.contentEl.querySelector(".ycs-brand b");
+  const brandName = this.contentEl.querySelector(".ycs-brand span");
+  const avatar = this.contentEl.querySelector(".ycs-workspace p>b");
+  const profile = this.contentEl.querySelector(".ycs-workspace p>span");
+  const detailProfile = this.contentEl.querySelector(".ycs-right .ycs-detail-grid b i")?.parentElement;
+  if (brandMark) { brandMark.textContent = identity.brandMark; brandMark.hidden = identity.brandMark === ""; }
+  if (brandName) { brandName.textContent = identity.brandName; brandName.hidden = identity.brandName === ""; }
+  if (avatar) { avatar.textContent = identity.avatarText; avatar.hidden = identity.avatarText === ""; }
+  if (profile) { profile.innerHTML = `${esc(identity.displayName)}<br><small>${esc(identity.role)}</small>`; profile.hidden = identity.displayName === "" && identity.role === ""; }
+  if (detailProfile) { detailProfile.innerHTML = `<i>${esc(identity.avatarText)}</i>${esc(identity.displayName)}`; detailProfile.hidden = identity.avatarText === "" && identity.displayName === ""; }
 };
 
 // 未接入真实 AI 服务前，不展示会误导用户的静态“AI 助手建议”。
@@ -563,63 +551,6 @@ DashboardView.prototype.renderDetail = function (root) {
   void this.updateDetailTextStats(note, context);
 };
 
-// 标题区眼珠仅在其自身的悬停范围内跟随指针，避免全局鼠标监听持续占用动画帧。
-DashboardView.prototype.installTitleEye = function () {
-  const eye = this.contentEl.querySelector(".ycs-title-eye"), irises = [...(eye?.querySelectorAll(".ycs-title-iris") || [])];
-  if (!eye || !irises.length || eye.dataset.bound) return;
-  eye.dataset.bound = "true";
-  const current = { x: 0, y: 0, targetX: 0, targetY: 0 };
-  let drag = null;
-  const animate = () => {
-    if (!eye.isConnected) return;
-    current.x += (current.targetX - current.x) * .18;
-    current.y += (current.targetY - current.y) * .18;
-    irises.forEach((iris) => { iris.style.transform = `translate(calc(-50% + ${current.x.toFixed(2)}px), calc(-50% + ${current.y.toFixed(2)}px))`; });
-    if (Math.abs(current.targetX - current.x) > .03 || Math.abs(current.targetY - current.y) > .03) this.titleEyeFrame = window.requestAnimationFrame(animate);
-    else this.titleEyeFrame = 0;
-  };
-  const request = () => { if (!this.titleEyeFrame) this.titleEyeFrame = window.requestAnimationFrame(animate); };
-  eye.onpointerdown = (event) => {
-    if (event.button !== 0) return;
-    const title = this.contentEl.querySelector(".ycs-title"), actions = this.contentEl.querySelector(".ycs-actions");
-    if (!title || !actions) return;
-    const eyeRect = eye.getBoundingClientRect(), titleRect = title.getBoundingClientRect(), actionsRect = actions.getBoundingClientRect();
-    const center = eyeRect.left + eyeRect.width / 2;
-    drag = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      offset: Number(this.plugin.dashboardSettings.glasses?.offset) || 0,
-      minDelta: titleRect.right + eyeRect.width / 2 + 8 - center,
-      maxDelta: actionsRect.left - eyeRect.width / 2 - 8 - center,
-      moved: false
-    };
-    eye.setPointerCapture?.(event.pointerId);
-    event.preventDefault();
-  };
-  eye.onpointermove = (event) => {
-    if (drag?.pointerId === event.pointerId) {
-      const rawDelta = event.clientX - drag.startX;
-      const delta = Math.min(drag.maxDelta, Math.max(drag.minDelta, rawDelta));
-      drag.moved ||= Math.abs(rawDelta) > 2;
-      this.plugin.dashboardSettings.glasses.offset = Math.min(600, Math.max(-600, drag.offset + delta));
-      this.applyGlassesAppearance();
-      return;
-    }
-    const rect = eye.getBoundingClientRect(), x = (event.clientX - rect.left) / Math.max(1, rect.width) - .5, y = (event.clientY - rect.top) / Math.max(1, rect.height) - .5;
-    current.targetX = Math.max(-3.2, Math.min(3.2, x * 7)); current.targetY = Math.max(-2.3, Math.min(2.3, y * 5)); request();
-  };
-  const finishDrag = (event) => {
-    if (!drag || (event?.pointerId !== undefined && event.pointerId !== drag.pointerId)) return;
-    const shouldSave = drag.moved;
-    drag = null;
-    if (shouldSave) void this.plugin.savePluginSettings();
-  };
-  eye.onpointerup = finishDrag;
-  eye.onpointercancel = finishDrag;
-  eye.onlostpointercapture = finishDrag;
-  eye.onpointerleave = () => { if (drag) return; current.targetX = 0; current.targetY = 0; request(); };
-};
-
 DashboardView.prototype.updateDetailTextStats = async function (note, context) {
   try {
     const content = await this.app.vault.cachedRead(note.file);
@@ -646,6 +577,18 @@ DashboardView.prototype.stat = function (label, value, caption, _icon, slim = fa
 };
 
 // 年度热力图只使用可追溯日期：创建日期、完成阅读日期与当前待沉淀状态。
+const renderCompactWithAnnualTimeline = DashboardView.prototype.renderCompact;
+DashboardView.prototype.renderCompact = function (root, stats, long, pending) {
+  renderCompactWithAnnualTimeline.call(this, root, stats, long, pending);
+  if (this.contentEl.querySelector(".ycs-compact-timeline")) return;
+  const timeline = document.createElement("section");
+  timeline.className = "ycs-timeline ycs-compact-timeline";
+  timeline.setAttribute("aria-label", "年度阅读热力");
+  const detail = root.querySelector(".ycs-compact-detail");
+  if (detail) detail.insertAdjacentElement("beforebegin", timeline);
+  else root.appendChild(timeline);
+};
+
 const notesWithReadingDates = DashboardView.prototype.notes;
 DashboardView.prototype.notes = function () {
   return notesWithReadingDates.call(this).map((note) => {
@@ -713,7 +656,6 @@ DashboardView.prototype.renderAnnualReadingTimeline = function () {
 
 DashboardView.prototype.stripDashboardDecorations = function () {
   this.contentEl.querySelectorAll(".ycs-sidebar nav i,.ycs-sidebar nav em,.ycs-group-head > i,.ycs-group-head > b").forEach((element) => element.remove());
-  this.contentEl.querySelector(".ycs-brand b")?.remove();
   const workspaceName = this.contentEl.querySelector(".ycs-workspace > div");
   if (workspaceName) workspaceName.textContent = this.app.vault.getName();
   const detailHead = this.contentEl.querySelector(".ycs-right-head");
@@ -829,6 +771,6 @@ DashboardView.prototype.refreshReadingCompletionRate = function () {
 DashboardView.prototype.render = async function () {
   await renderDashboardWithAnnualTimeline.call(this);
   this.refreshReadingCompletionRate();
-  if (!this.isCompact()) this.renderAnnualReadingTimeline();
+  this.renderAnnualReadingTimeline();
   this.stripDashboardDecorations();
 };

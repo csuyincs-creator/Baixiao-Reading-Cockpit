@@ -1,7 +1,7 @@
 {
   "id": "ycs-reading-dashboard",
   "name": "阅读吸收驾驶舱",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "minAppVersion": "1.5.0",
   "description": "原生阅读状态与知识沉淀看板",
   "author": "YCS",
