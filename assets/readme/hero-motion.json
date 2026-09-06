@@ -1,0 +1,18 @@
+{
+  "width": 1200,
+  "fps": 30,
+  "duration": 6.0,
+  "colors": 256,
+  "dither": "none",
+  "clip_to_base_alpha": true,
+  "max_size_mb": 2.5,
+  "layers": [
+    { "id": "col-unread", "enter": { "start": 0.1, "end": 0.9, "from": [-58, 26] }, "exit": { "start": 5.35, "end": 5.95, "to": [0, 0] } },
+    { "id": "col-reading", "enter": { "start": 0.35, "end": 1.15, "from": [-58, 26] }, "exit": { "start": 5.35, "end": 5.95, "to": [0, 0] } },
+    { "id": "col-done", "enter": { "start": 0.6, "end": 1.4, "from": [-58, 26] }, "exit": { "start": 5.35, "end": 5.95, "to": [0, 0] } },
+    { "id": "stat-ring", "enter": { "start": 2.4, "end": 3.2, "from": [0, 26] }, "exit": { "start": 5.35, "end": 5.95, "to": [0, 0] } }
+  ],
+  "reveals": [
+    { "id": "heatmap", "axis": "x", "start": 1.5, "end": 2.9, "exit": { "start": 5.35, "end": 5.95 } }
+  ]
+}
